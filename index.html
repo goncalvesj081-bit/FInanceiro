@@ -472,7 +472,7 @@ function processarDados(rawDesp,rawRec){
     if(!receitasDetalhe[p.mesNome]) receitasDetalhe[p.mesNome]=[];
     receitasDetalhe[p.mesNome].push({cat:(row["CATEGORIA"]||"Receita").trim(),valor,pagador:(row["PAGADOR"]||"").trim()});
   });
-  const mesesComDados=MESES_CONFIG.filter(m=>dadosPorMes[m]);
+  const mesesComDados=MESES_CONFIG.filter(m=>dadosPorMes[m]||receitasPorMes[m]);
   mesSelecionado=mesesComDados[mesesComDados.length-1]||MESES_CONFIG[0];
   filtroAtivo="Todos";
   renderTabs();
@@ -484,7 +484,7 @@ function renderTabs(){
   const bar=document.getElementById("monthBar");
   bar.innerHTML="";
   MESES_CONFIG.forEach(m=>{
-    const temDados=!!dadosPorMes[m];
+    const temDados=!!(dadosPorMes[m]||receitasPorMes[m]);
     const btn=document.createElement("button");
     btn.className="month-tab"+(m===mesSelecionado?" active":"")+(!temDados?" vazio":"");
     btn.innerHTML=m+(temDados?`<span class="dot"></span>`:"");
@@ -507,10 +507,38 @@ function renderTabs(){
 
 // ── RENDER MÊS ────────────────────────────────────────────────
 function renderMes(){
-  const dados=dadosPorMes[mesSelecionado];
+  const dados=dadosPorMes[mesSelecionado]||[];
   const main=document.getElementById("mainContent");
-  if(!dados||dados.length===0){
+  const receita0=receitasPorMes[mesSelecionado]||0;
+  const recDetalhe0=receitasDetalhe[mesSelecionado]||[];
+  if(!dados.length && !receita0){
     main.innerHTML=`<div class="vazio-msg"><div style="font-size:40px">📭</div><p style="margin-top:10px;font-size:13px">Nenhum lançamento para <strong>${mesSelecionado}</strong>.</p></div>`;
+    return;
+  }
+  if(!dados.length){
+    main.innerHTML=`
+    <div class="cards" style="grid-template-columns:repeat(2,1fr)">
+      <div class="card" style="--card-accent:var(--green)">
+        <div class="card-label">Receita</div>
+        <div class="card-val green">${fmt(receita0)}</div>
+        <div class="card-sub">${recDetalhe0.length} entrada(s)</div>
+      </div>
+      <div class="card" style="--card-accent:var(--muted)">
+        <div class="card-label">Despesas</div>
+        <div class="card-val" style="color:var(--muted)">R$ 0,00</div>
+        <div class="card-sub">nenhum lançamento</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Receitas do mês</div>
+      ${recDetalhe0.length
+        ? recDetalhe0.map(r=>`<div class="rec-row"><span>${r.cat}${r.pagador?" · "+r.pagador:""}</span><span class="rec-val">${fmt(r.valor)}</span></div>`).join("")
+        : `<div class="rec-row" style="color:var(--muted)">Nenhuma receita detalhada</div>`}
+    </div>
+    <div class="vazio-msg" style="padding:30px 0">
+      <div style="font-size:32px">💸</div>
+      <p style="margin-top:8px;font-size:13px;color:var(--muted)">Nenhuma despesa registrada em <strong>${mesSelecionado}</strong> ainda.</p>
+    </div>`;
     return;
   }
   const receita=receitasPorMes[mesSelecionado]||0;
@@ -725,16 +753,16 @@ function renderTabela(dados){
 // ── CONSOLIDADO ───────────────────────────────────────────────
 function renderConsolidado(){
   const main=document.getElementById("mainContent");
-  const mesesComDados=MESES_CONFIG.filter(m=>dadosPorMes[m]);
+  const mesesComDados=MESES_CONFIG.filter(m=>dadosPorMes[m]||receitasPorMes[m]);
   if(!mesesComDados.length){ main.innerHTML=`<div class="vazio-msg">📭</div>`; return; }
   const totalRecGeral=mesesComDados.reduce((s,m)=>s+(receitasPorMes[m]||0),0);
-  const totalDespGeral=mesesComDados.reduce((s,m)=>s+dadosPorMes[m].reduce((a,l)=>a+l.valor,0),0);
+  const totalDespGeral=mesesComDados.reduce((s,m)=>s+(dadosPorMes[m]?dadosPorMes[m].reduce((a,l)=>a+l.valor,0):0),0);
   const saldoGeral=totalRecGeral-totalDespGeral;
   const todasCats={};
-  mesesComDados.forEach(m=>dadosPorMes[m].forEach(l=>{ todasCats[l.cat]=(todasCats[l.cat]||0)+l.valor; }));
+  mesesComDados.forEach(m=>{ if(dadosPorMes[m]) dadosPorMes[m].forEach(l=>{ todasCats[l.cat]=(todasCats[l.cat]||0)+l.valor; }); });
   const catOrdGeral=Object.entries(todasCats).sort((a,b)=>b[1]-a[1]);
   const recMes=mesesComDados.map(m=>receitasPorMes[m]||0);
-  const despMes=mesesComDados.map(m=>dadosPorMes[m].reduce((s,l)=>s+l.valor,0));
+  const despMes=mesesComDados.map(m=>dadosPorMes[m]?dadosPorMes[m].reduce((s,l)=>s+l.valor,0):0);
   const saldoMes=mesesComDados.map((m,i)=>recMes[i]-despMes[i]);
   const isDark=document.documentElement.getAttribute("data-theme")==="dark";
   const gridColor=isDark?"rgba(255,255,255,.06)":"rgba(0,0,0,.06)";
