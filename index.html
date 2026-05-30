@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Despesas 2026 — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e2e0d8;
+  --text:#1a1a18;--muted:#7a7870;
+  --green:#1a6b3a;--green-bg:#e6f4ec;
+  --red:#b83232;--red-bg:#fbeaea;
+  --blue:#1a4fa0;--blue-bg:#e8eef8;
+  --amber:#8a5a00;--amber-bg:#fdf3dc;
+  --purple:#5a2d8a;--purple-bg:#f0eaf8;
+  --teal:#0e6b5e;--teal-bg:#e4f4f1;
+}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--text);color:#f5f4f0;padding:20px 36px;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:16px;font-weight:500;letter-spacing:.5px}
+.header-right{display:flex;align-items:center;gap:12px}
+.sync-btn{padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#f5f4f0;font-size:11px;font-family:'IBM Plex Sans',sans-serif;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
+.sync-btn:hover{background:rgba(255,255,255,.15)}
+.sync-btn.loading{opacity:.6;pointer-events:none}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:#4ade80}
+.sync-dot.syncing{background:#fbbf24;animation:pulse .8s infinite}
+.sync-dot.erro{background:#f87171}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.last-sync{font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.4;letter-spacing:.5px}
+
+/* MONTH BAR */
+.month-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 36px;display:flex;align-items:center;gap:0;overflow-x:auto}
+.month-tab{padding:14px 18px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:'IBM Plex Sans',sans-serif}
+.month-tab:hover{color:var(--text)}
+.month-tab.active{color:var(--text);border-bottom-color:var(--text);font-weight:600}
+.month-tab.vazio{color:#ccc;cursor:default}
+.month-tab.consolidado{color:var(--blue);font-weight:600;border-left:1px solid var(--border);margin-left:8px;padding-left:20px}
+.month-tab.consolidado.active{border-bottom-color:var(--blue)}
+.month-tab .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#4ade80;margin-left:5px;vertical-align:middle}
+
+/* LAYOUT */
+.main{padding:24px 36px;max-width:1100px;margin:0 auto}
+
+/* CARDS */
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.card-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;font-weight:500}
+.card-val{font-size:20px;font-weight:600;font-family:'IBM Plex Mono',monospace;letter-spacing:-.5px}
+.card-val.red{color:var(--red)}.card-val.green{color:var(--green)}.card-val.blue{color:var(--blue)}.card-val.amber{color:var(--amber)}.card-val.purple{color:var(--purple)}
+.card-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* RECEITA BREAKDOWN */
+.rec-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.rec-row:last-child{border-bottom:none}
+.rec-val{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--green)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.panel-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+
+.cat-list{display:flex;flex-direction:column;gap:8px}
+.cat-row{display:flex;align-items:center;gap:10px;cursor:pointer;padding:3px 6px;border-radius:6px;transition:background .12s}
+.cat-row:hover{background:var(--surface2)}
+.cat-row.active-filter{background:var(--surface2);outline:1px solid var(--border)}
+.cat-label{font-size:12px;width:130px;flex-shrink:0}
+.cat-bar-track{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.cat-bar-fill{height:100%;border-radius:3px}
+.cat-val{font-size:11px;font-family:'IBM Plex Mono',monospace;width:65px;text-align:right;color:var(--muted)}
+.cat-pct{font-size:10px;color:var(--muted);width:32px;text-align:right}
+
+.conta-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.conta-row:last-child{border-bottom:none}
+.conta-val{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)}
+
+/* FILTROS */
+.filtros{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.filtro-btn{padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:11px;font-family:'IBM Plex Sans',sans-serif;cursor:pointer;transition:all .15s;font-weight:500}
+.filtro-btn:hover{border-color:#aaa;color:var(--text)}
+.filtro-btn.active{background:var(--text);border-color:var(--text);color:#f5f4f0}
+.filtro-clear{font-size:10px;color:var(--blue);cursor:pointer;margin-left:4px;text-decoration:underline}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:0 8px 10px 0;text-align:left;border-bottom:1px solid var(--border);font-weight:500}
+td{padding:8px 8px 8px 0;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface2)}
+.td-data{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap}
+.td-val{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:var(--red);text-align:right}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:500;letter-spacing:.3px}
+.b-ali{background:var(--amber-bg);color:var(--amber)}
+.b-out{background:var(--surface2);color:var(--muted)}
+.b-net{background:var(--blue-bg);color:var(--blue)}
+.b-str{background:var(--purple-bg);color:var(--purple)}
+.b-cai{background:var(--teal-bg);color:var(--teal)}
+.b-den{background:var(--green-bg);color:var(--green)}
+
+/* CONSOLIDADO */
+.consol-table th,.consol-table td{padding:9px 10px 9px 0;font-size:12px}
+.consol-table td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px}
+.consol-table th:not(:first-child){text-align:right}
+.consol-table tr.total-row td{font-weight:600;border-top:2px solid var(--border);padding-top:12px}
+
+.loading-msg{text-align:center;padding:60px 20px;color:var(--muted)}
+.loading-msg .spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--text);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.erro-msg,.vazio-msg{text-align:center;padding:60px 20px;color:var(--muted)}
+
+/* dica clique no pizza */
+.chart-hint{font-size:10px;color:var(--muted);text-align:center;margin-top:6px;opacity:.7}
+
+@media(max-width:700px){
+  .cards{grid-template-columns:1fr 1fr}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .main{padding:16px}
+  header,.month-bar{padding-left:16px;padding-right:16px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 Despesas 2026</h1>
+  <div class="header-right">
+    <span class="last-sync" id="lastSync"></span>
+    <button class="sync-btn" id="syncBtn" onclick="sincronizar()">
+      <span class="sync-dot" id="syncDot"></span>
+      Sincronizar
+    </button>
+  </div>
+</header>
+
+<div class="month-bar" id="monthBar"></div>
+<div class="main" id="mainContent">
+  <div class="loading-msg"><div class="spinner"></div>Carregando dados do Google Sheets...</div>
+</div>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycby4ryqxYQ5Xy1x1CTipOrxk1CSBD1SU7VaZhIfbJmqNYl7a_e9fA79eci-1UfjZroLJ/exec";
+const ABA_DESPESAS = "DESPESAS";
+const ABA_RECEITAS = "RECEITAS";
+const MESES_CONFIG = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+const CORES = {
+  "Alimentação":    {hex:"#d4790a",cls:"b-ali"},
+  "Outros":         {hex:"#888780",cls:"b-out"},
+  "Internet":       {hex:"#1a4fa0",cls:"b-net"},
+  "Stream":         {hex:"#5a2d8a",cls:"b-str"},
+  "Caixinha Paloma":{hex:"#0e6b5e",cls:"b-cai"},
+  "Caixinha Praia": {hex:"#0e6b5e",cls:"b-cai"},
+  "Dentista":       {hex:"#1a6b3a",cls:"b-den"},
+};
+function corHex(c){return(CORES[c]||{hex:"#aaa"}).hex}
+function corCls(c){return(CORES[c]||{cls:"b-out"}).cls}
+function fmt(v){return"R$ "+Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function parseData(dataRaw){
+  const mesNomes={1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",7:"Julho",8:"Agosto",9:"Setembro",10:"Outubro",11:"Novembro",12:"Dezembro"};
+  if(!dataRaw) return null;
+  let d;
+  if(typeof dataRaw==="string"&&dataRaw.includes("T")) d=new Date(dataRaw);
+  else if(typeof dataRaw==="string"&&dataRaw.includes("/")){ const p=dataRaw.split("/"); d=new Date(2026,parseInt(p[1])-1,parseInt(p[0])); }
+  else if(typeof dataRaw==="number") d=new Date(Math.round((dataRaw-25569)*86400*1000));
+  else return null;
+  return {
+    mesNome: mesNomes[d.getUTCMonth()+1]||"",
+    dataStr: String(d.getUTCDate()).padStart(2,"0")+"/"+String(d.getUTCMonth()+1).padStart(2,"0")
+  };
+}
+
+let dadosPorMes={}, receitasPorMes={}, receitasDetalhe={};
+let mesSelecionado="", filtroAtivo="Todos";
+let chartPizza=null, chartDia=null, chartConsolid=null;
+
+// ── SYNC ──────────────────────────────────────────────────────
+async function sincronizar(){
+  setSyncStatus("syncing");
+  document.getElementById("mainContent").innerHTML=`<div class="loading-msg"><div class="spinner"></div>Buscando dados do Google Sheets...</div>`;
+  try{
+    const [resD,resR]=await Promise.all([
+      fetch(API_URL+"?aba="+encodeURIComponent(ABA_DESPESAS)+"&token=joao771964").then(r=>r.json()),
+      fetch(API_URL+"?aba="+encodeURIComponent(ABA_RECEITAS)+"&token=joao771964").then(r=>r.json())
+    ]);
+    processarDados(resD,resR);
+    setSyncStatus("ok");
+    const n=new Date();
+    document.getElementById("lastSync").textContent="sync "+String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");
+  }catch(e){
+    setSyncStatus("erro");
+    document.getElementById("mainContent").innerHTML=`<div class="erro-msg"><div style="font-size:28px">⚠️</div><p style="margin-top:8px;font-size:13px">Erro ao conectar: ${e.message}</p><button onclick="sincronizar()" style="margin-top:16px;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;font-size:12px">Tentar novamente</button></div>`;
+  }
+}
+function setSyncStatus(s){
+  document.getElementById("syncDot").className="sync-dot"+(s==="syncing"?" syncing":s==="erro"?" erro":"");
+  document.getElementById("syncBtn").className="sync-btn"+(s==="syncing"?" loading":"");
+}
+
+// ── PROCESSAR ─────────────────────────────────────────────────
+function processarDados(rawDesp,rawRec){
+  dadosPorMes={}; receitasPorMes={}; receitasDetalhe={};
+  rawDesp.forEach(row=>{
+    const p=parseData(row["DATA"]); if(!p||!p.mesNome) return;
+    const valor=parseFloat(row["VALOR"])||0; if(!valor) return;
+    if(!dadosPorMes[p.mesNome]) dadosPorMes[p.mesNome]=[];
+    dadosPorMes[p.mesNome].push({data:p.dataStr,cat:(row["CATEGORIA"]||"Outros").trim(),valor,conta:(row["CONTA"]||"").trim(),estab:(row["ESTABELECIMENTO"]||"").trim()});
+  });
+  rawRec.forEach(row=>{
+    const p=parseData(row["DATA"]); if(!p||!p.mesNome) return;
+    const valor=parseFloat(row["VALOR"])||0; if(!valor) return;
+    receitasPorMes[p.mesNome]=(receitasPorMes[p.mesNome]||0)+valor;
+    if(!receitasDetalhe[p.mesNome]) receitasDetalhe[p.mesNome]=[];
+    receitasDetalhe[p.mesNome].push({cat:(row["CATEGORIA"]||"Receita").trim(),valor,pagador:(row["PAGADOR"]||"").trim()});
+  });
+  const mesesComDados=MESES_CONFIG.filter(m=>dadosPorMes[m]);
+  mesSelecionado=mesesComDados[mesesComDados.length-1]||MESES_CONFIG[0];
+  filtroAtivo="Todos";
+  renderTabs();
+  renderMes();
+}
+
+// ── TABS ──────────────────────────────────────────────────────
+function renderTabs(){
+  const bar=document.getElementById("monthBar");
+  bar.innerHTML="";
+  MESES_CONFIG.forEach(m=>{
+    const temDados=!!dadosPorMes[m];
+    const btn=document.createElement("button");
+    btn.className="month-tab"+(m===mesSelecionado?" active":"")+(!temDados?" vazio":"");
+    btn.innerHTML=m+(temDados?`<span class="dot"></span>`:"");
+    if(temDados) btn.onclick=()=>{ mesSelecionado=m; filtroAtivo="Todos"; renderTabs(); renderMes(); };
+    bar.appendChild(btn);
+  });
+  // Aba consolidado
+  const btnC=document.createElement("button");
+  btnC.className="month-tab consolidado"+(mesSelecionado==="CONSOLIDADO"?" active":"");
+  btnC.textContent="▦ Consolidado";
+  btnC.onclick=()=>{ mesSelecionado="CONSOLIDADO"; renderTabs(); renderConsolidado(); };
+  bar.appendChild(btnC);
+}
+
+// ── RENDER MÊS ────────────────────────────────────────────────
+function renderMes(){
+  const dados=dadosPorMes[mesSelecionado];
+  const main=document.getElementById("mainContent");
+  if(!dados||dados.length===0){
+    main.innerHTML=`<div class="vazio-msg"><div style="font-size:32px">📭</div><p style="margin-top:8px;font-size:13px">Nenhum lançamento para <strong>${mesSelecionado}</strong>.</p></div>`;
+    return;
+  }
+
+  const receita=receitasPorMes[mesSelecionado]||0;
+  const totalDesp=dados.reduce((s,l)=>s+l.valor,0);
+  const saldo=receita-totalDesp;
+  const recDetalhe=receitasDetalhe[mesSelecionado]||[];
+
+  const porCat={};
+  dados.forEach(l=>{ porCat[l.cat]=(porCat[l.cat]||0)+l.valor; });
+  const catOrd=Object.entries(porCat).sort((a,b)=>b[1]-a[1]);
+  const [maiorCat,maiorVal]=catOrd[0];
+
+  const porConta={};
+  dados.forEach(l=>{ porConta[l.conta]=(porConta[l.conta]||0)+l.valor; });
+
+  const porDia={};
+  dados.forEach(l=>{ const d=l.data.split("/")[0]; porDia[d]=(porDia[d]||0)+l.valor; });
+  const diasOrd=Object.keys(porDia).sort((a,b)=>Number(a)-Number(b));
+  const mesIdx=String(MESES_CONFIG.indexOf(mesSelecionado)+1).padStart(2,"0");
+
+  // receita breakdown HTML
+  const recHtml=recDetalhe.length
+    ? recDetalhe.map(r=>`<div class="rec-row"><span>${r.cat}${r.pagador?" · "+r.pagador:""}</span><span class="rec-val">${fmt(r.valor)}</span></div>`).join("")
+    : `<div class="rec-row" style="color:var(--muted);font-size:12px">Nenhuma receita registrada</div>`;
+
+  main.innerHTML=`
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Receita</div>
+      <div class="card-val green">${fmt(receita)}</div>
+      <div class="card-sub">${recDetalhe.length||0} entrada(s)</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Despesas</div>
+      <div class="card-val red">${fmt(totalDesp)}</div>
+      <div class="card-sub">${dados.length} lançamentos</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Saldo</div>
+      <div class="card-val ${saldo>=0?'green':'red'}">${fmt(saldo)}</div>
+      <div class="card-sub">receita − despesas</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Maior Categoria</div>
+      <div class="card-val amber">${fmt(maiorVal)}</div>
+      <div class="card-sub">${maiorCat}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Média por dia</div>
+      <div class="card-val purple">${fmt(totalDesp/diasOrd.length)}</div>
+      <div class="card-sub">${diasOrd.length} dias com gasto</div>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="panel" style="grid-column:span 1">
+      <div class="panel-title">Receitas do mês</div>
+      ${recHtml}
+    </div>
+    <div class="panel" style="grid-column:span 2">
+      <div class="panel-title">
+        <span>Por categoria</span>
+        <span class="chart-hint">clique no gráfico ou na linha para filtrar</span>
+      </div>
+      <div style="display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:center">
+        <div style="position:relative;height:180px"><canvas id="chartPizza" role="img" aria-label="Despesas por categoria" style="cursor:pointer"></canvas></div>
+        <div class="cat-list" id="catList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-title">Gasto por dia</div>
+      <div style="position:relative;height:190px"><canvas id="chartDia" role="img" aria-label="Gasto por dia"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Por conta / cartão</div>
+      <div id="contasList"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>Lançamentos</span>
+    </div>
+    <div class="filtros" id="filtrosDiv"></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Data</th><th>Estabelecimento</th><th>Categoria</th><th>Conta</th>
+          <th style="text-align:right">Valor</th>
+        </tr></thead>
+        <tbody id="tblBody"></tbody>
+      </table>
+    </div>
+  </div>`;
+
+  // Contas
+  const contasEl=document.getElementById("contasList");
+  Object.entries(porConta).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>{
+    contasEl.innerHTML+=`<div class="conta-row"><span>${c}</span><span class="conta-val">${fmt(v)}</span></div>`;
+  });
+
+  // Filtros
+  const cats=["Todos",...Object.keys(porCat).sort()];
+  const filtrosEl=document.getElementById("filtrosDiv");
+  cats.forEach(c=>{
+    const btn=document.createElement("button");
+    btn.className="filtro-btn"+(c===filtroAtivo?" active":"");
+    btn.textContent=c;
+    btn.onclick=()=>{ filtroAtivo=c; sincFiltros(dados); };
+    filtrosEl.appendChild(btn);
+  });
+
+  renderTabela(dados);
+  renderCatList(catOrd,totalDesp,dados);
+
+  // Chart pizza com clique
+  if(chartPizza)chartPizza.destroy();
+  chartPizza=new Chart(document.getElementById("chartPizza"),{
+    type:"doughnut",
+    data:{labels:catOrd.map(([c])=>c),datasets:[{data:catOrd.map(([,v])=>v),backgroundColor:catOrd.map(([c])=>corHex(c)),borderWidth:2,borderColor:"#fff",hoverOffset:8}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"55%",
+      plugins:{legend:{display:false},tooltip:{backgroundColor:"#1a1a18",borderColor:"rgba(0,0,0,.1)",borderWidth:1,callbacks:{label:ctx=>" "+ctx.label+": "+fmt(ctx.parsed)+" ("+((ctx.parsed/totalDesp)*100).toFixed(1)+"%)"}}},
+      onClick:(_,els)=>{
+        if(els.length){
+          const cat=catOrd[els[0].index][0];
+          filtroAtivo=filtroAtivo===cat?"Todos":cat;
+          sincFiltros(dados);
+        }
+      }
+    }
+  });
+
+  // Chart dia
+  if(chartDia)chartDia.destroy();
+  chartDia=new Chart(document.getElementById("chartDia"),{
+    type:"bar",
+    data:{labels:diasOrd.map(d=>d+"/"+mesIdx),datasets:[{data:diasOrd.map(d=>porDia[d]),backgroundColor:"rgba(184,50,50,0.18)",borderColor:"#b83232",borderWidth:1.5,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:"#1a1a18",callbacks:{label:ctx=>" "+fmt(ctx.parsed.y)}}},
+      scales:{x:{grid:{display:false},ticks:{color:"#7a7870",font:{size:10},maxRotation:45,autoSkip:false}},y:{grid:{color:"rgba(0,0,0,0.05)"},ticks:{color:"#7a7870",font:{size:10},callback:v=>"R$"+v}}}
+    }
+  });
+}
+
+// ── CAT LIST (clicável) ───────────────────────────────────────
+function renderCatList(catOrd,totalDesp,dados){
+  const el=document.getElementById("catList");
+  if(!el) return;
+  el.innerHTML="";
+  catOrd.forEach(([cat,val])=>{
+    const pct=(val/totalDesp*100).toFixed(1);
+    const div=document.createElement("div");
+    div.className="cat-row"+(filtroAtivo===cat?" active-filter":"");
+    div.innerHTML=`<span class="cat-label">${cat}</span>
+      <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${corHex(cat)}"></div></div>
+      <span class="cat-val">${fmt(val)}</span>
+      <span class="cat-pct">${pct}%</span>`;
+    div.onclick=()=>{ filtroAtivo=filtroAtivo===cat?"Todos":cat; sincFiltros(dados); };
+    el.appendChild(div);
+  });
+}
+
+// ── SYNC FILTROS (sem re-render completo) ─────────────────────
+function sincFiltros(dados){
+  const porCat={};
+  dados.forEach(l=>{ porCat[l.cat]=(porCat[l.cat]||0)+l.valor; });
+  const catOrd=Object.entries(porCat).sort((a,b)=>b[1]-a[1]);
+  const totalDesp=dados.reduce((s,l)=>s+l.valor,0);
+  renderCatList(catOrd,totalDesp,dados);
+  renderTabela(dados);
+}
+
+// ── TABELA ────────────────────────────────────────────────────
+function renderTabela(dados){
+  document.querySelectorAll(".filtro-btn").forEach(b=>{
+    b.className="filtro-btn"+(b.textContent===filtroAtivo?" active":"");
+    b.onclick=()=>{ filtroAtivo=b.textContent; sincFiltros(dados); };
+  });
+  const filtrados=filtroAtivo==="Todos"?dados:dados.filter(l=>l.cat===filtroAtivo);
+  const total=filtrados.reduce((s,l)=>s+l.valor,0);
+  const tbl=document.getElementById("tblBody");
+  if(!tbl) return;
+  tbl.innerHTML=filtrados.sort((a,b)=>a.data.localeCompare(b.data)).map(l=>`
+    <tr>
+      <td class="td-data">${l.data}</td>
+      <td>${l.estab}</td>
+      <td><span class="badge ${corCls(l.cat)}">${l.cat}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${l.conta}</td>
+      <td class="td-val">${fmt(l.valor)}</td>
+    </tr>`).join("")+
+  `<tr>
+    <td colspan="4" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;padding-top:12px">
+      ${filtroAtivo==="Todos"?"Total geral":"Subtotal — "+filtroAtivo}
+    </td>
+    <td class="td-val" style="padding-top:12px;font-weight:600">${fmt(total)}</td>
+  </tr>`;
+}
+
+// ── CONSOLIDADO ───────────────────────────────────────────────
+function renderConsolidado(){
+  const main=document.getElementById("mainContent");
+  const mesesComDados=MESES_CONFIG.filter(m=>dadosPorMes[m]);
+  if(!mesesComDados.length){
+    main.innerHTML=`<div class="vazio-msg"><div style="font-size:32px">📭</div><p style="margin-top:8px;font-size:13px">Nenhum dado disponível ainda.</p></div>`;
+    return;
+  }
+
+  // Totais gerais
+  const totalRecGeral=mesesComDados.reduce((s,m)=>s+(receitasPorMes[m]||0),0);
+  const totalDespGeral=mesesComDados.reduce((s,m)=>s+dadosPorMes[m].reduce((a,l)=>a+l.valor,0),0);
+  const saldoGeral=totalRecGeral-totalDespGeral;
+
+  // Todas categorias
+  const todasCats={};
+  mesesComDados.forEach(m=>dadosPorMes[m].forEach(l=>{ todasCats[l.cat]=(todasCats[l.cat]||0)+l.valor; }));
+  const catOrdGeral=Object.entries(todasCats).sort((a,b)=>b[1]-a[1]);
+
+  // Dados para chart linha
+  const recMes=mesesComDados.map(m=>receitasPorMes[m]||0);
+  const despMes=mesesComDados.map(m=>dadosPorMes[m].reduce((s,l)=>s+l.valor,0));
+  const saldoMes=mesesComDados.map((m,i)=>recMes[i]-despMes[i]);
+
+  main.innerHTML=`
+  <div class="cards" style="grid-template-columns:repeat(4,1fr)">
+    <div class="card">
+      <div class="card-label">Total Receitas</div>
+      <div class="card-val green">${fmt(totalRecGeral)}</div>
+      <div class="card-sub">${mesesComDados.length} mese(s)</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Despesas</div>
+      <div class="card-val red">${fmt(totalDespGeral)}</div>
+      <div class="card-sub">todos os meses</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Saldo Acumulado</div>
+      <div class="card-val ${saldoGeral>=0?'green':'red'}">${fmt(saldoGeral)}</div>
+      <div class="card-sub">receitas − despesas</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Maior Categoria</div>
+      <div class="card-val amber">${fmt(catOrdGeral[0][1])}</div>
+      <div class="card-sub">${catOrdGeral[0][0]}</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <div class="panel-title">Evolução mensal — Receita × Despesa × Saldo</div>
+    <div style="position:relative;height:240px"><canvas id="chartLinha" role="img" aria-label="Evolução mensal"></canvas></div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-title">Resumo por mês</div>
+      <div style="overflow-x:auto">
+        <table class="consol-table">
+          <thead><tr>
+            <th>Mês</th><th>Receita</th><th>Despesas</th><th>Saldo</th>
+          </tr></thead>
+          <tbody id="consolTbl"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Total por categoria (geral)</div>
+      <div class="cat-list" id="consolCatList"></div>
+    </div>
+  </div>`;
+
+  // Tabela por mês
+  const tbl=document.getElementById("consolTbl");
+  mesesComDados.forEach((m,i)=>{
+    const s=saldoMes[i];
+    tbl.innerHTML+=`<tr>
+      <td style="font-weight:500">${m}</td>
+      <td style="color:var(--green)">${fmt(recMes[i])}</td>
+      <td style="color:var(--red)">${fmt(despMes[i])}</td>
+      <td style="color:${s>=0?'var(--green)':'var(--red)'};font-weight:500">${fmt(s)}</td>
+    </tr>`;
+  });
+  tbl.innerHTML+=`<tr class="total-row">
+    <td>Total</td>
+    <td style="color:var(--green)">${fmt(totalRecGeral)}</td>
+    <td style="color:var(--red)">${fmt(totalDespGeral)}</td>
+    <td style="color:${saldoGeral>=0?'var(--green)':'var(--red)'}">${fmt(saldoGeral)}</td>
+  </tr>`;
+
+  // Cat list geral
+  const catEl=document.getElementById("consolCatList");
+  catOrdGeral.forEach(([cat,val])=>{
+    const pct=(val/totalDespGeral*100).toFixed(1);
+    catEl.innerHTML+=`<div class="cat-row">
+      <span class="cat-label">${cat}</span>
+      <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${corHex(cat)}"></div></div>
+      <span class="cat-val">${fmt(val)}</span>
+      <span class="cat-pct">${pct}%</span>
+    </div>`;
+  });
+
+  // Chart linha
+  if(chartConsolid)chartConsolid.destroy();
+  chartConsolid=new Chart(document.getElementById("chartLinha"),{
+    type:"line",
+    data:{
+      labels:mesesComDados.map(m=>m.slice(0,3)),
+      datasets:[
+        {label:"Receita",data:recMes,borderColor:"#1a6b3a",backgroundColor:"rgba(26,107,58,0.08)",borderWidth:2,pointRadius:4,pointBackgroundColor:"#1a6b3a",tension:.35,fill:true},
+        {label:"Despesas",data:despMes,borderColor:"#b83232",backgroundColor:"rgba(184,50,50,0.08)",borderWidth:2,pointRadius:4,pointBackgroundColor:"#b83232",tension:.35,fill:true},
+        {label:"Saldo",data:saldoMes,borderColor:"#1a4fa0",backgroundColor:"rgba(26,79,160,0.05)",borderWidth:2,pointRadius:4,pointBackgroundColor:"#1a4fa0",tension:.35,borderDash:[4,3],fill:false},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,position:"top",labels:{font:{size:11,family:"IBM Plex Sans"},boxWidth:10,padding:16}},
+        tooltip:{backgroundColor:"#1a1a18",borderColor:"rgba(0,0,0,.1)",borderWidth:1,callbacks:{label:ctx=>" "+ctx.dataset.label+": "+fmt(ctx.parsed.y)}}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{color:"#7a7870",font:{size:11}}},
+        y:{grid:{color:"rgba(0,0,0,0.05)"},ticks:{color:"#7a7870",font:{size:10},callback:v=>"R$"+(v>=1000?(v/1000).toFixed(1)+"k":v)}}
+      }
+    }
+  });
+}
+
+sincronizar();
+</script>
+</body>
+</html>
