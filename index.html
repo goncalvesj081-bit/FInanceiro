@@ -1423,18 +1423,11 @@ function fecharModal(e){
 
 // ── MODAL LANÇAMENTO ─────────────────────────────────────────
 function getCats(tipo){
-  const lista = tipo==="DESPESAS" ? listaCatsDesp : listaCatsRec;
-  if(lista.length) return lista;
-  // fallback: extrai dos dados já carregados
-  const raw = tipo==="DESPESAS" ? rawDespGlobal : rawRecGlobal;
-  const cats = [...new Set(raw.map(r=>(r["CATEGORIA"]||"").trim()).filter(Boolean))].sort();
-  return cats.length ? cats : ["Outros"];
+  if(tipo==="DESPESAS") return ["Alimentação","Internet","Dentista","Corte de Cabelo","Caixinha Paloma","Caixinha Praia","Outros","Stream/Jogo","Assinatura/Tech"];
+  return ["Salário","Extra","Juros","Acerto de Conta","Prêmio"];
 }
 function getContas(){
-  if(listaContas.length) return listaContas;
-  // fallback: extrai dos dados já carregados
-  const contas = [...new Set(rawDespGlobal.map(r=>(r["CONTA"]||"").trim()).filter(Boolean))].sort();
-  return contas.length ? contas : ["Nubank","Pix"];
+  return ["Cartão NuBank","Cartão Inter","Caixinha MP","Dinheiro","Salário"];
 }
 function populaSelect(id, opcoes, valorAtual=""){
   const sel = document.getElementById(id);
