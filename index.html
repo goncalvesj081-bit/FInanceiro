@@ -451,7 +451,7 @@ tr:hover td{background:var(--surface2)}
       </div>
       <div class="lanc-field" id="editCampoConta">
         <label>Conta / Cartão</label>
-        <input type="text" id="editConta">
+        <select id="editConta"></select>
       </div>
       <div class="lanc-field" id="editCampoPagador" style="display:none">
         <label>Pagador / Descrição</label>
@@ -498,7 +498,7 @@ tr:hover td{background:var(--surface2)}
       </div>
       <div class="lanc-field" id="lancCampoConta" style="">
         <label>Conta / Cartão</label>
-        <input type="text" id="lancConta" placeholder="ex: Nubank, Pix...">
+        <select id="lancConta"></select>
       </div>
       <div class="lanc-field" id="lancCampoPagador" style="display:none">
         <label>Pagador / Descrição</label>
@@ -605,6 +605,7 @@ function toggleTheme(){
 
 let dadosPorMes={}, receitasPorMes={}, receitasDetalhe={};
 let rawDespGlobal=[], rawRecGlobal=[];
+let listaCatsDesp=[], listaCatsRec=[], listaContas=[];
 let mesSelecionado="", filtroAtivo="Todos";
 let chartPizza=null, chartDia=null, chartConsolid=null;
 
@@ -613,10 +614,14 @@ async function sincronizar(){
   setSyncStatus("syncing");
   document.getElementById("mainContent").innerHTML=`<div class="loading-msg"><div class="spinner"></div>Buscando dados...</div>`;
   try{
-    const [resD,resR]=await Promise.all([
+    const [resD,resR,resL]=await Promise.all([
       fetch(API_URL+"?aba="+encodeURIComponent(ABA_DESPESAS)+"&token=joao771964").then(r=>r.json()),
-      fetch(API_URL+"?aba="+encodeURIComponent(ABA_RECEITAS)+"&token=joao771964").then(r=>r.json())
+      fetch(API_URL+"?aba="+encodeURIComponent(ABA_RECEITAS)+"&token=joao771964").then(r=>r.json()),
+      fetch(API_URL+"?aba=LISTAS&token=joao771964").then(r=>r.json())
     ]);
+    if(resL.catsDesp) listaCatsDesp=resL.catsDesp;
+    if(resL.catsRec)  listaCatsRec=resL.catsRec;
+    if(resL.contas)   listaContas=resL.contas;
     processarDados(resD,resR);
     setSyncStatus("ok");
     const n=new Date();
@@ -1285,18 +1290,14 @@ function abrirEdit(i,tipo){
   document.getElementById("editData").value=`2026-${mm}-${dd}`;
   document.getElementById("editValor").value=l.valor;
 
-  // Categorias
-  const sel=document.getElementById("editCategoria");
-  const cats=isDesp?CATS_DESP:CATS_REC;
-  sel.innerHTML=cats.map(c=>`<option value="${c}"${c===l.cat?" selected":""}>${c}</option>`).join("");
+  populaSelect("editCategoria", getCats(tipo), l.cat);
 
-  // Campos condicionais
   document.getElementById("editCampoEstab").style.display  =isDesp?"":"none";
   document.getElementById("editCampoConta").style.display  =isDesp?"":"none";
   document.getElementById("editCampoPagador").style.display=isDesp?"none":"";
   if(isDesp){
     document.getElementById("editEstab").value=l.estab||"";
-    document.getElementById("editConta").value=l.conta||"";
+    populaSelect("editConta", getContas(), l.conta||"");
   } else {
     document.getElementById("editPagador").value=l.pagador||"";
   }
@@ -1318,7 +1319,7 @@ async function salvarEdicao(){
   const valor=parseFloat(document.getElementById("editValor").value);
   const cat=document.getElementById("editCategoria").value;
   const estab=document.getElementById("editEstab").value.trim();
-  const conta=document.getElementById("editConta").value.trim();
+  const conta=document.getElementById("editConta").value;
   const pagador=document.getElementById("editPagador").value.trim();
   const status=document.getElementById("editStatus");
   const saveBtn=document.getElementById("editSaveBtn");
@@ -1421,8 +1422,24 @@ function fecharModal(e){
 }
 
 // ── MODAL LANÇAMENTO ─────────────────────────────────────────
-const CATS_DESP = ["Alimentação","Internet","Stream/Jogo","Assinatura/Tech","Caixinha Paloma","Caixinha Praia","Dentista","Outros"];
-const CATS_REC  = ["Salário","Freelance","Transferência","Outros"];
+function getCats(tipo){
+  const lista = tipo==="DESPESAS" ? listaCatsDesp : listaCatsRec;
+  if(lista.length) return lista;
+  // fallback: extrai dos dados já carregados
+  const raw = tipo==="DESPESAS" ? rawDespGlobal : rawRecGlobal;
+  const cats = [...new Set(raw.map(r=>(r["CATEGORIA"]||"").trim()).filter(Boolean))].sort();
+  return cats.length ? cats : ["Outros"];
+}
+function getContas(){
+  if(listaContas.length) return listaContas;
+  // fallback: extrai dos dados já carregados
+  const contas = [...new Set(rawDespGlobal.map(r=>(r["CONTA"]||"").trim()).filter(Boolean))].sort();
+  return contas.length ? contas : ["Nubank","Pix"];
+}
+function populaSelect(id, opcoes, valorAtual=""){
+  const sel = document.getElementById(id);
+  sel.innerHTML = opcoes.map(o=>`<option value="${o}"${o===valorAtual?" selected":""}>${o}</option>`).join("");
+}
 let tipoLanc = "DESPESAS";
 
 function abrirLanc(){
@@ -1433,7 +1450,6 @@ function abrirLanc(){
   document.getElementById("lancData").value = `${hoje.getFullYear()}-${mm}-${dd}`;
   document.getElementById("lancValor").value = "";
   document.getElementById("lancEstab").value = "";
-  document.getElementById("lancConta").value = "";
   document.getElementById("lancPagador").value = "";
   document.getElementById("lancStatus").className = "lanc-status";
   document.getElementById("lancStatus").textContent = "";
@@ -1449,11 +1465,8 @@ function setTipoLanc(tipo){
   const isDesp = tipo === "DESPESAS";
   document.getElementById("btnDesp").className = "lanc-toggle-btn" + (isDesp ? " active-desp" : "");
   document.getElementById("btnRec").className  = "lanc-toggle-btn" + (!isDesp ? " active-rec" : "");
-  // Popula categorias
-  const sel = document.getElementById("lancCategoria");
-  const cats = isDesp ? CATS_DESP : CATS_REC;
-  sel.innerHTML = cats.map(c=>`<option value="${c}">${c}</option>`).join("");
-  // Mostra/esconde campos
+  populaSelect("lancCategoria", getCats(tipo));
+  if(isDesp) populaSelect("lancConta", getContas());
   document.getElementById("lancCampoEstab").style.display   = isDesp ? "" : "none";
   document.getElementById("lancCampoConta").style.display   = isDesp ? "" : "none";
   document.getElementById("lancCampoPagador").style.display = isDesp ? "none" : "";
@@ -1463,7 +1476,7 @@ async function salvarLanc(){
   const valor   = parseFloat(document.getElementById("lancValor").value);
   const cat     = document.getElementById("lancCategoria").value;
   const estab   = document.getElementById("lancEstab").value.trim();
-  const conta   = document.getElementById("lancConta").value.trim();
+  const conta   = document.getElementById("lancConta").value;
   const pagador = document.getElementById("lancPagador").value.trim();
   const status  = document.getElementById("lancStatus");
   const saveBtn = document.getElementById("lancSaveBtn");
